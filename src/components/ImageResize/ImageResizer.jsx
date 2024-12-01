@@ -16,7 +16,7 @@ const units = {
 const ImageResizer = () => {
   const [images, setImages] = useState([]);
   const [resizedImages, setResizedImages] = useState([]);
-  const [dimensions, setDimensions] = useState({ width: 300, height: 300 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [originalAspectRatios, setOriginalAspectRatios] = useState([]);
   const [formats, setFormats] = useState([]);
   const [unit, setUnit] = useState("px");
@@ -29,7 +29,7 @@ const ImageResizer = () => {
     const loadedImages = [];
     const aspectRatios = [];
     const detectedFormats = [];
-
+  
     files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -39,7 +39,15 @@ const ImageResizer = () => {
           loadedImages.push(event.target.result);
           aspectRatios.push(img.width / img.height);
           detectedFormats.push(file.type.split("/")[1].toUpperCase());
-
+  
+          // Automatically set dimensions for the first image
+          if (loadedImages.length === 1) {
+            setDimensions({
+              width: img.width, // Automatically use the image's width
+              height: img.height, // Automatically use the image's height
+            });
+          }
+  
           if (loadedImages.length === files.length) {
             setImages((prevImages) => [...prevImages, ...loadedImages]);
             setOriginalAspectRatios((prevRatios) => [
