@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { useState } from "react";
 import FileDropzone from "../FileDropzone/FileDropzone";
 import ImagePreview from "../Image/ImagePreview";
@@ -19,9 +20,9 @@ const ImageResizer = () => {
   const [originalAspectRatios, setOriginalAspectRatios] = useState([]);
   const [formats, setFormats] = useState([]);
   const [unit, setUnit] = useState("px");
-  const [size, setSize] = useState(100);
-  const [outputFormat, setOutputFormat] = useState("jpeg");
-  const [loading, setLoading] = useState(false); // New state for loading
+  const [size, setSize] = useState(100); // Desired size in KB
+  const [outputFormat, setOutputFormat] = useState("jpeg"); // Default output format
+  const [loading, setLoading] = useState(false); // Loading state
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
@@ -76,38 +77,73 @@ const ImageResizer = () => {
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-          let quality = 1;
-          let resizedImageUrl;
+          let resizedImageUrl = "";
+          const desiredSize = size * 1024; // Desired size in bytes
 
-          if (size) {
-            const desiredSize = size * 1024;
-            let tempQuality = 1;
+          if (outputFormat === "png") {
+            // Adjust dimensions iteratively to fit size for PNG
+            let tempWidth = newWidth;
+            let tempHeight = newHeight;
 
-            while (tempQuality > 0) {
-              resizedImageUrl = canvas.toDataURL(
-                `image/${outputFormat}`,
-                tempQuality
-              );
+            while (true) {
+              resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`);
               const base64Length =
                 resizedImageUrl.length -
                 `data:image/${outputFormat};base64,`.length;
               const fileSize = Math.ceil((base64Length * 3) / 4);
 
-              if (fileSize <= desiredSize) {
-                quality = tempQuality;
+              if (
+                fileSize <= desiredSize ||
+                tempWidth <= 10 ||
+                tempHeight <= 10
+              ) {
                 break;
               }
-              tempQuality -= 0.05;
+
+              // Reduce dimensions
+              tempWidth = Math.round(tempWidth * 0.9);
+              tempHeight = Math.round(tempHeight * 0.9);
+              canvas.width = tempWidth;
+              canvas.height = tempHeight;
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             }
 
-            if (tempQuality <= 0) {
-              console.warn("Could not achieve the desired file size.");
-              quality = 0.1;
+            resolve(resizedImageUrl);
+          } else {
+            // For other formats (e.g., JPEG, WEBP), adjust quality
+            let minQuality = 0.1;
+            let maxQuality = 1.0;
+            let finalQuality = 1.0;
+
+            while (minQuality <= maxQuality) {
+              const midQuality = (minQuality + maxQuality) / 2;
+              const tempImageUrl = canvas.toDataURL(
+                `image/${outputFormat}`,
+                midQuality
+              );
+              const base64Length =
+                tempImageUrl.length -
+                `data:image/${outputFormat};base64,`.length;
+              const fileSize = Math.ceil((base64Length * 3) / 4);
+
+              if (fileSize > desiredSize) {
+                maxQuality = midQuality - 0.01;
+              } else {
+                finalQuality = midQuality;
+                resizedImageUrl = tempImageUrl;
+                minQuality = midQuality + 0.01;
+              }
             }
+
+            if (!resizedImageUrl) {
+              console.warn(
+                "Unable to match the desired file size. Using lowest quality."
+              );
+              resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`, 0.1);
+            }
+
+            resolve(resizedImageUrl);
           }
-
-          resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`, quality);
-          resolve(resizedImageUrl);
         };
       });
     });
@@ -117,7 +153,6 @@ const ImageResizer = () => {
       setLoading(false); // Stop loading
     });
   };
-
   const handleWidthChange = (width) => {
     setDimensions((prev) => ({
       ...prev,
@@ -180,12 +215,14 @@ const ImageResizer = () => {
               />
             </div>
           </div>
-          {
-            images.length === 0 ? "": <Button onClick={handleResize} color="primary" >
-            Resize All
-          </Button>
-          }
-         
+          {images.length === 0 ? (
+            ""
+          ) : (
+            <Button onClick={handleResize} color="primary">
+              Resize All
+            </Button>
+          )}
+
           {loading && (
             <div className="flex justify-start items-center space-x-2">
               <Spinner />
@@ -194,47 +231,51 @@ const ImageResizer = () => {
           )}
         </div>
       </div>
-
-      <h6 className="mb-4 text-4xl mt-5 font-extrabold leading-none tracking-tight text-gray-900  dark:text-white">
-        <mark className="px-2 text-white bg-cyan-500 rounded ">Preview</mark>{" "}
-        Image
-      </h6>
-      <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 mt-4">
-        {images.length > 0 ? (
-          images.map((image, index) => (
-            <div key={index} className="col-span-1">
-              <ImagePreview
-                index={index}
-                image={image}
-                format={formats[index]}
-                handleRemoveImage={handleRemoveImage}
-              />
-            </div>
-          ))
-        ) : (
-          <LoadingSkele />
-        )}
+      <div className="mx-7">
+        <h6 className="mb-4 text-4xl mt-5 font-extrabold leading-none tracking-tight text-gray-900  dark:text-white">
+          <mark className="px-2 text-white bg-cyan-500 rounded ">Preview</mark>{" "}
+          Image
+        </h6>
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 mt-4">
+          {images.length > 0 ? (
+            images.map((image, index) => (
+              <div key={index} className="col-span-1">
+                <ImagePreview
+                  index={index}
+                  image={image}
+                  format={formats[index]}
+                  handleRemoveImage={handleRemoveImage}
+                />
+              </div>
+            ))
+          ) : (
+            <LoadingSkele />
+          )}
+        </div>
       </div>
 
-      <h6 className="mb-4 text-4xl mt-5 font-extrabold leading-none tracking-tight text-gray-900  dark:text-white">
-        <mark className="px-2 text-white bg-cyan-500 rounded ">Final</mark>{" "}
-        Image
-      </h6>
-      <div className="grid grid-cols-6 gap-4 mt-4">
-        {resizedImages.length > 0 ? (
-          resizedImages.map((resizedImage, index) => (
-            <div key={index} className="col-span-1">
-              <ImageToDownload
-                index={index}
-                format={outputFormat}
-                resizedImage={resizedImage}
-                handleDownload={handleDownload}
-              />
-            </div>
-          ))
-        ) : (
-          <LoadingSkele />
-        )}
+      <div className=" mx-7">
+        <h6 className="mb-4 text-4xl mt-5 font-extrabold leading-none tracking-tight text-gray-900  dark:text-white">
+          <mark className="px-2 text-white bg-cyan-500 rounded ">Final</mark>{" "}
+          Image
+        </h6>
+
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 mt-4">
+          {resizedImages.length > 0 ? (
+            resizedImages.map((resizedImage, index) => (
+              <div key={index} className="col-span-1">
+                <ImageToDownload
+                  index={index}
+                  format={outputFormat}
+                  resizedImage={resizedImage}
+                  handleDownload={handleDownload}
+                />
+              </div>
+            ))
+          ) : (
+            <LoadingSkele />
+          )}
+        </div>
       </div>
     </div>
   );
