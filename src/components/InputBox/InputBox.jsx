@@ -10,7 +10,7 @@ const InputBox = ({ FileName, dimensions, handleChange,images }) => {
         {FileName}
       </label>
       <input
-        type="text"
+        type="number"
         id="default-input"
         value={dimensions}
         disabled={images  && 'disabled'}
