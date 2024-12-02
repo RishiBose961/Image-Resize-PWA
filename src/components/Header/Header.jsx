@@ -11,7 +11,7 @@ export default function App() {
       <NavbarContent justify="end">
         <NavbarItem className="flex">
           <a href="https://github.com/RishiBose961">
-          <img src="/icons8-github.gif" loading="lazy" alt="loading" className="w-10 h-10 cursor-pointer"/>
+          <img src="/icons8-github-150.png" loading="lazy" alt="loading" className="w-10 h-10 cursor-pointer"/>
           </a>
          
         </NavbarItem>
