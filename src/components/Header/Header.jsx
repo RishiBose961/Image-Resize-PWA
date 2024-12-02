@@ -5,7 +5,7 @@ export default function App() {
   return (
     <Navbar>
       <NavbarBrand>
-        <p className="font-bold text-inherit text-xl uppercase">Image Resize5</p>
+        <p className="font-bold text-inherit text-xl uppercase">Image Resize</p>
       </NavbarBrand>
  
       <NavbarContent justify="end">
