@@ -6,11 +6,12 @@ export const useServiceWorkerUpdater = () => {
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
-      });
+      navigator.serviceWorker.register('/sw.js').then((registration) => {
+        if (registration.waiting) {
+          setIsUpdateAvailable(true);
+          setWaitingWorker(registration.waiting);
+        }
 
-      navigator.serviceWorker.ready.then((registration) => {
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
@@ -22,6 +23,14 @@ export const useServiceWorkerUpdater = () => {
             });
           }
         });
+      });
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          window.location.reload();
+          refreshing = true;
+        }
       });
     }
   }, []);

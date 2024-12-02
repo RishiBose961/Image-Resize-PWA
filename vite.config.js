@@ -7,7 +7,12 @@ const manifestForPlugin = {
   devOptions: {
     enabled: true
   },
-  registerType: "prompt",
+  registerType: 'prompt', // Ensures service worker auto-updates
+  workbox: {
+    cleanupOutdatedCaches: true, // Clean old caches automatically
+    skipWaiting: true,          // Activates the new service worker immediately
+    clientsClaim: true,         // New service worker gains control of all pages
+  },
   includeAssets: ['favicon.ico', "apple-touc-icon.png", "masked-icon.png" ],
   manifest: {
     name: "Image Resize",
