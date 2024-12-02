@@ -20,7 +20,8 @@ const ImageResizer = () => {
   const [originalAspectRatios, setOriginalAspectRatios] = useState([]);
   const [formats, setFormats] = useState([]);
   const [unit, setUnit] = useState("px");
-  const [size, setSize] = useState(100); // Desired size in KB
+  const [size, setSize] = useState(); // Max desired size in KB
+  const [minSize, setMinSize] = useState();
   const [outputFormat, setOutputFormat] = useState("jpeg"); // Default output format
   const [loading, setLoading] = useState(false); // Loading state
 
@@ -66,48 +67,48 @@ const ImageResizer = () => {
 
   const handleResize = () => {
     if (images.length === 0) return;
-
+  
     setLoading(true); // Start loading
-
+  
     const resizedImagesList = images.map((image, index) => {
       const newWidth = convertToPixels(dimensions.width);
       const newHeight = newWidth / originalAspectRatios[index];
-
+  
       const canvas = document.createElement("canvas");
       canvas.width = newWidth;
       canvas.height = newHeight;
-
+  
       const img = new Image();
       img.src = image;
-
+  
       return new Promise((resolve) => {
         img.onload = () => {
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
+  
           let resizedImageUrl = "";
-          const desiredSize = size * 1024; // Desired size in bytes
-
+          const minSize = 50 * 1024; // Minimum size in bytes
+          const maxSize = size * 1024; // Maximum size in bytes
+  
           if (outputFormat === "png") {
-            // Adjust dimensions iteratively to fit size for PNG
+            // Adjust dimensions iteratively for PNG to fit within the size range
             let tempWidth = newWidth;
             let tempHeight = newHeight;
-
+  
             while (true) {
               resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`);
               const base64Length =
-                resizedImageUrl.length -
-                `data:image/${outputFormat};base64,`.length;
+                resizedImageUrl.length - `data:image/${outputFormat};base64,`.length;
               const fileSize = Math.ceil((base64Length * 3) / 4);
-
+  
               if (
-                fileSize <= desiredSize ||
+                (fileSize >= minSize && fileSize <= maxSize) ||
                 tempWidth <= 10 ||
                 tempHeight <= 10
               ) {
                 break;
               }
-
+  
               // Reduce dimensions
               tempWidth = Math.round(tempWidth * 0.9);
               tempHeight = Math.round(tempHeight * 0.9);
@@ -115,14 +116,14 @@ const ImageResizer = () => {
               canvas.height = tempHeight;
               ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             }
-
+  
             resolve(resizedImageUrl);
           } else {
-            // For other formats (e.g., JPEG, WEBP), adjust quality
+            // For JPEG, WEBP, adjust quality iteratively to fit within the size range
             let minQuality = 0.1;
             let maxQuality = 1.0;
             let finalQuality = 1.0;
-
+  
             while (minQuality <= maxQuality) {
               const midQuality = (minQuality + maxQuality) / 2;
               const tempImageUrl = canvas.toDataURL(
@@ -130,37 +131,41 @@ const ImageResizer = () => {
                 midQuality
               );
               const base64Length =
-                tempImageUrl.length -
-                `data:image/${outputFormat};base64,`.length;
+                tempImageUrl.length - `data:image/${outputFormat};base64,`.length;
               const fileSize = Math.ceil((base64Length * 3) / 4);
-
-              if (fileSize > desiredSize) {
-                maxQuality = midQuality - 0.01;
+  
+              if (fileSize < minSize) {
+                minQuality = midQuality + 0.01; // Increase quality to increase size
+              } else if (fileSize > maxSize) {
+                maxQuality = midQuality - 0.01; // Decrease quality to reduce size
               } else {
                 finalQuality = midQuality;
                 resizedImageUrl = tempImageUrl;
-                minQuality = midQuality + 0.01;
+                break;
               }
             }
-
+  
             if (!resizedImageUrl) {
               console.warn(
-                "Unable to match the desired file size. Using lowest quality."
+                "Unable to match the desired file size range. Using lowest quality."
               );
               resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`, 0.1);
             }
-
+  
             resolve(resizedImageUrl);
           }
         };
       });
     });
-
+  
     Promise.all(resizedImagesList).then((resized) => {
       setResizedImages(resized);
       setLoading(false); // Stop loading
     });
   };
+  
+
+  
   const handleWidthChange = (width) => {
     setDimensions((prev) => ({
       ...prev,
@@ -202,7 +207,7 @@ const ImageResizer = () => {
             handleChange={(e) => handleWidthChange(+e.target.value)}
           />
           <div className="  col-span-2">
-            <div className=" grid grid-cols-3 gap-3">
+            <div className=" grid grid-cols-4 gap-3">
               <SelectFormat
                 FileName="File Format"
                 dimensions={outputFormat}
@@ -216,9 +221,17 @@ const ImageResizer = () => {
                 handleChange={(e) => setUnit(e.target.value)}
               />
               <InputBox
-                FileName="File Size (KB)"
+                FileName="Min File Size (KB)"
+                dimensions={minSize}
+                images={images.length === 0}
+                placeholder={"Range 10"}
+                handleChange={(e) => setMinSize(+e.target.value)}
+              />
+              <InputBox
+                FileName="Max File Size (KB)"
                 dimensions={size}
                 images={images.length === 0}
+                placeholder={"Range 100"}
                 handleChange={(e) => setSize(+e.target.value)}
               />
             </div>
