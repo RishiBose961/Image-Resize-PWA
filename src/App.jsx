@@ -9,14 +9,13 @@ const App = () => {
       <Header />
       {isUpdateAvailable && (
         <div className="update-popup">
-          <p>A new version is available. Refresh now?</p>
-          <button onClick={updateServiceWorker}>Refresh</button>
+          <p>A new version is available. Update now?</p>
+          <button onClick={updateServiceWorker}>Update</button>
         </div>
       )}
       <div className="mx-auto max-w-7xl">
-      <ImageResizer/>
+        <ImageResizer />
       </div>
-     
     </>
   );
 };

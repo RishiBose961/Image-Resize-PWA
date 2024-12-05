@@ -5,7 +5,7 @@ export default function ImageToDownload({
   resizedImage,
   index,
   handleDownload,
-  format,
+  format
 }) {
   return (
     <div className="m-3">

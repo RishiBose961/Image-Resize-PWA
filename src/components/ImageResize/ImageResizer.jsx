@@ -30,7 +30,7 @@ const ImageResizer = () => {
     const loadedImages = [];
     const aspectRatios = [];
     const detectedFormats = [];
-  
+
     files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -40,7 +40,7 @@ const ImageResizer = () => {
           loadedImages.push(event.target.result);
           aspectRatios.push(img.width / img.height);
           detectedFormats.push(file.type.split("/")[1].toUpperCase());
-  
+
           // Automatically set dimensions for the first image
           if (loadedImages.length === 1) {
             setDimensions({
@@ -48,7 +48,7 @@ const ImageResizer = () => {
               height: img.height, // Automatically use the image's height
             });
           }
-  
+
           if (loadedImages.length === files.length) {
             setImages((prevImages) => [...prevImages, ...loadedImages]);
             setOriginalAspectRatios((prevRatios) => [
@@ -71,100 +71,121 @@ const ImageResizer = () => {
     setLoading(true); // Start loading
   
     const resizedImagesList = images.map((image, index) => {
-      const newWidth = convertToPixels(dimensions.width);
-      const newHeight = newWidth / originalAspectRatios[index];
-  
       const canvas = document.createElement("canvas");
-      canvas.width = newWidth;
-      canvas.height = newHeight;
+      const ctx = canvas.getContext("2d");
   
       const img = new Image();
       img.src = image;
+      img.crossOrigin = "anonymous"; // Ensure no CORS issues
   
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         img.onload = () => {
-          const ctx = canvas.getContext("2d");
+          let newWidth = convertToPixels(dimensions.width);
+          let newHeight = newWidth / originalAspectRatios[index];
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+  
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   
           let resizedImageUrl = "";
-          const minSize = 50 * 1024; // Minimum size in bytes
-          const maxSize = size * 1024; // Maximum size in bytes
+          const minBytes = minSize * 1024; // Minimum size in bytes
+          const maxBytes = size * 1024; // Maximum size in bytes
   
           if (outputFormat === "png") {
-            // Adjust dimensions iteratively for PNG to fit within the size range
-            let tempWidth = newWidth;
-            let tempHeight = newHeight;
-  
+            // PNG resizing
             while (true) {
               resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`);
-              const base64Length =
-                resizedImageUrl.length - `data:image/${outputFormat};base64,`.length;
+              const base64Length = resizedImageUrl.length - `data:image/${outputFormat};base64,`.length;
               const fileSize = Math.ceil((base64Length * 3) / 4);
   
               if (
-                (fileSize >= minSize && fileSize <= maxSize) ||
-                tempWidth <= 10 ||
-                tempHeight <= 10
+                (fileSize >= minBytes && fileSize <= maxBytes) ||
+                newWidth <= 10 ||
+                newHeight <= 10
               ) {
                 break;
               }
   
               // Reduce dimensions
-              tempWidth = Math.round(tempWidth * 0.9);
-              tempHeight = Math.round(tempHeight * 0.9);
-              canvas.width = tempWidth;
-              canvas.height = tempHeight;
+              newWidth = Math.round(newWidth * 0.9);
+              newHeight = Math.round(newHeight * 0.9);
+              canvas.width = newWidth;
+              canvas.height = newHeight;
               ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             }
   
             resolve(resizedImageUrl);
-          } else {
-            // For JPEG, WEBP, adjust quality iteratively to fit within the size range
+          } else if (["jpeg"].includes(outputFormat)) {
+            // JPEG resizing
             let minQuality = 0.1;
             let maxQuality = 1.0;
             let finalQuality = 1.0;
+            let attempts = 0;
   
-            while (minQuality <= maxQuality) {
+            while (minQuality <= maxQuality && attempts < 20) {
               const midQuality = (minQuality + maxQuality) / 2;
-              const tempImageUrl = canvas.toDataURL(
-                `image/${outputFormat}`,
-                midQuality
-              );
-              const base64Length =
-                tempImageUrl.length - `data:image/${outputFormat};base64,`.length;
+              const tempImageUrl = canvas.toDataURL(`image/${outputFormat}`, midQuality);
+              const base64Length = tempImageUrl.length - `data:image/${outputFormat};base64,`.length;
               const fileSize = Math.ceil((base64Length * 3) / 4);
   
-              if (fileSize < minSize) {
-                minQuality = midQuality + 0.01; // Increase quality to increase size
-              } else if (fileSize > maxSize) {
-                maxQuality = midQuality - 0.01; // Decrease quality to reduce size
+              if (fileSize < minBytes) {
+                minQuality = midQuality + 0.01;
+              } else if (fileSize > maxBytes) {
+                maxQuality = midQuality - 0.01;
               } else {
                 finalQuality = midQuality;
                 resizedImageUrl = tempImageUrl;
                 break;
               }
+  
+              attempts++;
             }
   
-            if (!resizedImageUrl) {
-              console.warn(
-                "Unable to match the desired file size range. Using lowest quality."
-              );
-              resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`, 0.1);
+            if (!resizedImageUrl && attempts >= 20) {
+              console.warn("Failed to resize using quality. Falling back to dimensions.");
+              while (true) {
+                newWidth = Math.round(newWidth * 0.9);
+                newHeight = Math.round(newHeight * 0.9);
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  
+                resizedImageUrl = canvas.toDataURL(`image/${outputFormat}`, 1.0);
+                const base64Length = resizedImageUrl.length - `data:image/${outputFormat};base64,`.length;
+                const fileSize = Math.ceil((base64Length * 3) / 4);
+  
+                if (
+                  (fileSize >= minBytes && fileSize <= maxBytes) ||
+                  newWidth <= 10 ||
+                  newHeight <= 10
+                ) {
+                  break;
+                }
+              }
             }
   
             resolve(resizedImageUrl);
           }
         };
+  
+        img.onerror = () => {
+          console.error("Image failed to load:", image);
+          reject(new Error("Failed to load image."));
+        };
       });
     });
   
-    Promise.all(resizedImagesList).then((resized) => {
-      setResizedImages(resized);
-      setLoading(false); // Stop loading
-    });
+    Promise.all(resizedImagesList)
+      .then((resized) => {
+        setResizedImages(resized);
+        setLoading(false); // Stop loading
+      })
+      .catch((error) => {
+        console.error("Error during image resizing:", error);
+        setLoading(false);
+      });
   };
   
-
   
   const handleWidthChange = (width) => {
     setDimensions((prev) => ({
